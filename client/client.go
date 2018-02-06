@@ -22,8 +22,9 @@ func newUserHandler(dbh dblayer.DatabaseHandler) *userServiceHandler {
 	return &userServiceHandler{dbHandler: dbh}
 }
 
-// ServeAPI creates the http router and the routes for the user service
-func ServeAPI(dbh dblayer.DatabaseHandler, endpoint string) error {
+// Router creates the http router and the routes for the user service. It needs to be
+// in a seperate function for testing purposes
+func Router(dbh dblayer.DatabaseHandler) *mux.Router {
 	client := newUserHandler(dbh)
 	r := mux.NewRouter()
 	r.Methods("GET").Path("/").HandlerFunc(client.healthcheck)
@@ -36,8 +37,14 @@ func ServeAPI(dbh dblayer.DatabaseHandler, endpoint string) error {
 	// I was contenplating using query params for this route, but I was not sure
 	// if multiple params were allowed, so I chose a more rigid option here.
 	r.Methods("GET").Path("/search/{criteria}/{search}").HandlerFunc(client.searchUserHandler)
+
+	return r
+}
+
+// ServeAPI starts the router
+func ServeAPI(dbh dblayer.DatabaseHandler, endpoint string) error {	
 	log.Println("[UserServiceHandler] Server started")
-	return http.ListenAndServe(endpoint, r)
+	return http.ListenAndServe(endpoint, Router(dbh))
 }
 
 // ErrorResponse is a json object to hold error messages.
@@ -47,19 +54,20 @@ type ErrorResponse struct {
 
 // getUserHandler takes an id and returns a user from the database
 func (ush *userServiceHandler) getUserHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("[UserServiceHandler] Recieved GET request on /user")
+	log.Printf("[UserServiceHandler] Recieved GET request on %s\n", r.URL.String())
 
 	vars := mux.Vars(r)
 	userID, ok := vars["id"]
 	if !ok {
-		ush.writeErrorResponse(w, "no id found")
+		log.Println("[UserServiceHandler] no ID found in path")
+		ush.writeErrorResponse(w, "no id found", http.StatusBadRequest)
 		return
 	}
 
 	user, err := ush.dbHandler.FindUserByID(userID)
 	if err != nil {
 		log.Printf("[UserServiceHandler] Error getting user: %s\n", err.Error())
-		ush.writeErrorResponse(w, err.Error())
+		ush.writeErrorResponse(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
@@ -95,7 +103,7 @@ func (ush *userServiceHandler) addUserHandler(w http.ResponseWriter, r *http.Req
 	addedUser, err := ush.dbHandler.AddUser(user)
 	if err != nil {
 		log.Printf("[UserServiceHandler] Error adding new user: %s\n", err.Error())
-		ush.writeErrorResponse(w, err.Error())
+		ush.writeErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -110,13 +118,13 @@ func (ush *userServiceHandler) deleteUserHandler(w http.ResponseWriter, r *http.
 	userID, ok := vars["id"]
 	if !ok {
 		log.Println("[UserServiceHandler] no id found in path")
-		ush.writeErrorResponse(w, "no id found")
+		ush.writeErrorResponse(w, "no id found", http.StatusBadRequest)
 		return
 	}
 
 	if err := ush.dbHandler.DeleteUser(userID); err != nil {
 		log.Printf("[UserServiceHandler] Error deleting user: %s\n", err.Error())
-		ush.writeErrorResponse(w, err.Error())
+		ush.writeErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -132,21 +140,21 @@ func (ush *userServiceHandler) searchUserHandler(w http.ResponseWriter, r *http.
 	searchItem, ok := vars["search"]
 	if !ok {
 		log.Println("[UserServiceHandler] no search item found in path")
-		ush.writeErrorResponse(w, "no search item found")
+		ush.writeErrorResponse(w, "no search item found", http.StatusBadRequest)
 		return
 	}
 
 	criteria, ok := vars["criteria"]
 	if !ok {
 		log.Println("[UserServiceHandler] no criteria item found in path")
-		ush.writeErrorResponse(w, "no criteria found")
+		ush.writeErrorResponse(w, "no criteria found", http.StatusBadRequest)
 		return
 	}
 
 	users, err := ush.dbHandler.FindUserByCriteria(criteria, searchItem)
 	if err != nil {
 		log.Printf("[UserServiceHandler] Error searching for users: %s\n", err.Error())
-		ush.writeErrorResponse(w, err.Error())
+		ush.writeErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -161,7 +169,7 @@ func (ush *userServiceHandler) updateUserHandler(w http.ResponseWriter, r *http.
 	userID, ok := vars["id"]
 	if !ok {
 		log.Println("[UserServiceHandler] no id found in path")
-		ush.writeErrorResponse(w, "no id found")
+		ush.writeErrorResponse(w, "no id found", http.StatusBadRequest)
 		return
 	}
 
@@ -185,7 +193,7 @@ func (ush *userServiceHandler) updateUserHandler(w http.ResponseWriter, r *http.
 	updUser, err := ush.dbHandler.UpdateUser(user)
 	if err != nil {
 		log.Printf("[UserServiceHandler] Error updating user: %s\n", err.Error())
-		ush.writeErrorResponse(w, err.Error())
+		ush.writeErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -198,7 +206,8 @@ func (ush *userServiceHandler) healthcheck(w http.ResponseWriter, r *http.Reques
 	w.Write([]byte(`{status : ok}`))
 }
 
-func (ush *userServiceHandler) writeErrorResponse(w http.ResponseWriter, msg string) {
+func (ush *userServiceHandler) writeErrorResponse(w http.ResponseWriter, msg string, code int) {
+	w.WriteHeader(code)
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	er := ErrorResponse{msg}
 	output, oErr := json.Marshal(er)
