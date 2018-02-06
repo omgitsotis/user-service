@@ -30,13 +30,17 @@ func (db *MockDatabase) AddUser(user persistence.User) (*persistence.User, error
 	user.ID = strconv.Itoa(db.IDCount)
 	db.IDCount++
 	db.Users = append(db.Users, &user)
+
+	log.Printf("[MockDB] added new user %s\n", user.ID)
 	db.EventEmitter.emitEvent("user created", "mock-user-json")
+
 	return &user, nil
 }
 
 func (db *MockDatabase) FindUserByID(id string) (*persistence.User, error) {
 	for _, user := range db.Users {
 		if user.ID == id {
+			log.Printf("[MockDB] found user %s\n", user.ID)
 			return user, nil
 		}
 	}
