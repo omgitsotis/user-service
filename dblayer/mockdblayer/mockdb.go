@@ -2,25 +2,35 @@ package mockdblayer
 
 import (
 	"errors"
+	"log"
 	"strconv"
 
 	persistence "github.com/omgitsotis/user-service/dblayer/persistence"
 )
 
+type MockEventEmitter struct{}
+
+func (mee *MockEventEmitter) emitEvent(eventType, msg string) {
+	log.Printf("emiting %s event with msg %s\n", eventType, msg)
+}
+
 type MockDatabase struct {
-	Users   []*persistence.User
-	IDCount int
+	Users        []*persistence.User
+	EventEmitter MockEventEmitter
+	IDCount      int
 }
 
 func NewMockDatabase() *MockDatabase {
 	users := make([]*persistence.User, 0)
-	return &MockDatabase{users, 1}
+	mockEmitter := MockEventEmitter{}
+	return &MockDatabase{users, mockEmitter, 1}
 }
 
 func (db *MockDatabase) AddUser(user persistence.User) (*persistence.User, error) {
 	user.ID = strconv.Itoa(db.IDCount)
 	db.IDCount++
 	db.Users = append(db.Users, &user)
+	db.EventEmitter.emitEvent("user created", "mock-user-json")
 	return &user, nil
 }
 
@@ -48,6 +58,7 @@ func (db *MockDatabase) DeleteUser(id string) error {
 	}
 
 	db.Users = append(db.Users[:indexToDelete], db.Users[indexToDelete+1:]...)
+	db.EventEmitter.emitEvent("user deleted", "mock-user-json")
 	return nil
 }
 
@@ -115,5 +126,6 @@ func (db *MockDatabase) UpdateUser(u persistence.User) (*persistence.User, error
 		return user, nil
 	}
 
+	db.EventEmitter.emitEvent("user deleted", "mock-user-json")
 	return nil, errors.New("invalid search criteria")
 }
