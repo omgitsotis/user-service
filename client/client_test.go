@@ -23,7 +23,7 @@ func AddTestUser(mockDB dblayer.DatabaseHandler) {
 	mockDB.AddUser(mockUser)
 }
 
-func TestAddUserHandler(t *testing.T) {
+func TestGetUserHandler(t *testing.T) {
 	mockDB, err := dblayer.NewPersistenceLayer(dblayer.MOCKDB, "")
 	if err != nil {
 		t.Fatal(err)
