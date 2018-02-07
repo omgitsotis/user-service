@@ -62,6 +62,7 @@ func (db *MockDatabase) DeleteUser(id string) error {
 	}
 
 	db.Users = append(db.Users[:indexToDelete], db.Users[indexToDelete+1:]...)
+	log.Printf("[MockDB] deleted user %s\n", id)
 	db.EventEmitter.emitEvent("user deleted", "mock-user-json")
 	return nil
 }
@@ -80,15 +81,15 @@ func (db *MockDatabase) FindUserByCriteria(criteria string, value string) ([]*pe
 				results = append(results, user)
 			}
 		case "last_name":
-			if user.FirstName == value {
+			if user.LastName == value {
 				results = append(results, user)
 			}
 		case "nickname":
-			if user.FirstName == value {
+			if user.Nickname == value {
 				results = append(results, user)
 			}
 		case "email":
-			if user.FirstName == value {
+			if user.Email == value {
 				results = append(results, user)
 			}
 		default:
@@ -96,6 +97,8 @@ func (db *MockDatabase) FindUserByCriteria(criteria string, value string) ([]*pe
 		}
 	}
 
+	log.Printf("[MockDB] found %v user(s) with %s %s",
+		len(results), criteria, value)
 	return results, nil
 }
 
@@ -125,11 +128,12 @@ func (db *MockDatabase) UpdateUser(u persistence.User) (*persistence.User, error
 			if u.Password != "" {
 				user.FirstName = u.Password
 			}
-		}
 
-		return user, nil
+			log.Printf("[MockDB] updated user %v", user)
+			db.EventEmitter.emitEvent("user updated", "mock-user-json")
+			return user, nil
+		}
 	}
 
-	db.EventEmitter.emitEvent("user deleted", "mock-user-json")
 	return nil, errors.New("invalid search criteria")
 }
